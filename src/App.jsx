@@ -5,23 +5,10 @@ import React, { useState, useEffect, useRef } from "react";
 // environment or an installed browser extension, not from this code.
 
 const ConnectionVisualizer = () => {
+  // Guard against heavy first paint in sandbox: delay full ring render until after mount
+  const [isReady, setIsReady] = useState(false);
   // Dynamically load html2canvas only when needed (canvas sandbox-safe)
-  const loadHtml2Canvas = async () => {
-    if (typeof window !== 'undefined' && window.html2canvas) return window.html2canvas;
-    if (typeof document !== 'undefined') {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-        s.async = true;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-      return window.html2canvas;
-    }
-    throw new Error('html2canvas not available in this environment');
-  };
-  // --- State ---
+    // --- State ---
   const [scatter, setScatter] = useState(false);
   const [firstDegree, setFirstDegree] = useState(10);
   const [averageConnections, setAverageConnections] = useState(15);
@@ -31,6 +18,7 @@ const ConnectionVisualizer = () => {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [colorScheme, setColorScheme] = useState("default");
   const [showRipples, setShowRipples] = useState(false);
+  const [lockRipples, setLockRipples] = useState(false);
   const [beamType, setBeamType] = useState("loving-kindness"); // "good-vibes" | "loving-kindness" | "we-care"
   const svgRef = useRef();
   const imageRef = useRef();
@@ -44,6 +32,15 @@ const ConnectionVisualizer = () => {
     const t = setTimeout(() => setScatter(false), 1000);
     return () => clearTimeout(t);
   }, [firstDegree, averageConnections]);
+
+  // Defer heavy SVG node rendering until after mount to avoid init stalls
+  useEffect(() => {
+    let raf1 = requestAnimationFrame(() => {
+      let raf2 = requestAnimationFrame(() => setIsReady(true));
+      return () => cancelAnimationFrame(raf2);
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, []);
 
   // Simple runtime tests to catch logic regressions (acts as "test cases")
   useEffect(() => {
@@ -184,54 +181,7 @@ const ConnectionVisualizer = () => {
     return nodes;
   };
 
-  const handleShare = async () => {
-    if (!imageRef.current) return;
-    try {
-      const html2canvas = await loadHtml2Canvas();
-      const canvas = await html2canvas(imageRef.current, {
-        scale: (typeof window !== 'undefined' && window.devicePixelRatio > 1) ? 2 : 1,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      });
-
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1));
-      if (!blob) throw new Error('Canvas toBlob failed');
-      const url = URL.createObjectURL(blob);
-
-      const ua = navigator.userAgent;
-const isSafari = ua.includes('Safari/') && !ua.includes('Chrome/');
-const isIOS = /iPad|iPhone|iPod/.test(ua);
-
-
-      if (isSafari || isIOS) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
-        return;
-      }
-
-      const link = document.createElement('a');
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      link.download = `network-visualization-${ts}.png`;
-      link.href = url;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('Share (save image) failed:', e);
-      try {
-        const html2canvas = await loadHtml2Canvas();
-        const fallbackCanvas = await html2canvas(imageRef.current, { scale: 1, backgroundColor: '#ffffff' });
-        const dataUrl = fallbackCanvas.toDataURL('image/png');
-        window.open(dataUrl, '_blank', 'noopener,noreferrer');
-      } catch (e2) {
-        console.error('Share fallback failed:', e2);
-        alert('Sorry—saving the image failed in this browser. Try desktop Chrome/Edge/Firefox.');
-      }
-    }
-  };
-
+  
   // --- Social share helpers ---
   const SHARE_URL = encodeURIComponent("https://www.jordanquaglia.com/ripplemap");
   const SHARE_TEXT = encodeURIComponent("Visualize your social network and ripple effect:");
@@ -260,9 +210,13 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
   const triggerRipples = (type) => {
     setBeamType(type);
     setShowRipples(true);
+    setLockRipples(true);
     if (rippleTimerRef.current) clearTimeout(rippleTimerRef.current);
     const ms = type === "we-care" ? 14000 : (type === "good-vibes" ? 8000 : 12000);
-    rippleTimerRef.current = setTimeout(() => setShowRipples(false), ms);
+    rippleTimerRef.current = setTimeout(() => {
+      setLockRipples(false);
+      setShowRipples(false);
+    }, ms);
   };
 
   const renderRipples = () => {
@@ -355,7 +309,7 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           {/* Top option: Good Vibes */}
           <button
             onMouseEnter={() => { setBeamType("good-vibes"); setShowRipples(true); }}
-            onMouseLeave={() => setShowRipples(false) /* hover end */}
+            onMouseLeave={() => { if (!lockRipples) setShowRipples(false); } /* hover end */}
             onClick={() => triggerRipples("good-vibes")}
             className="bg-amber-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
@@ -365,7 +319,7 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           {/* Loving-Kindness: outward only (pink) */}
           <button
             onMouseEnter={() => { setBeamType("loving-kindness"); setShowRipples(true); }}
-            onMouseLeave={() => setShowRipples(false) /* hover end */}
+            onMouseLeave={() => { if (!lockRipples) setShowRipples(false); } /* hover end */}
             onClick={() => triggerRipples("loving-kindness")}
             className="bg-pink-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
@@ -375,7 +329,7 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           {/* We-Care: out and back (green) with stronger return visibility */}
           <button
             onMouseEnter={() => { setBeamType("we-care"); setShowRipples(true); }}
-            onMouseLeave={() => setShowRipples(false) /* hover end */}
+            onMouseLeave={() => { if (!lockRipples) setShowRipples(false); } /* hover end */}
             onClick={() => triggerRipples("we-care")}
             className="bg-green-600 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
@@ -383,13 +337,6 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           </button>
 
           {/* Save image */}
-          <button
-            onClick={handleShare}
-            className="bg-gray-700 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110 mt-2"
-          >
-            Share (Save Image)
-          </button>
-
           {/* Social share row */}
           <div className="flex items-center gap-3 mt-2">
             <span className="text-xs uppercase tracking-wide text-gray-500">Share:</span>
@@ -432,9 +379,13 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           )}
 
           {/* Rings of clustered nodes */}
-          {renderClusteredNodes(firstDegree, 90, 1)}
-          {renderClusteredNodes(secondDegree, 180, 2)}
-          {renderClusteredNodes(thirdDegree, 270, 3)}
+          {isReady && (
+            <>
+              {renderClusteredNodes(firstDegree, 90, 1)}
+              {renderClusteredNodes(secondDegree, 180, 2)}
+              {renderClusteredNodes(thirdDegree, 270, 3)}
+            </>
+          )}
 
           {/* Ripples sit on top so they are visible above nodes */}
           {renderRipples()}
