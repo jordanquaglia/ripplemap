@@ -1,11 +1,26 @@
 import React, { useState, useEffect, useRef } from "react";
-import html2canvas from "html2canvas";
 
 // NOTE: This component has **no** MetaMask/web3 calls. If you still see a
 // "Failed to connect to MetaMask" error, it's coming from the host/sandbox
 // environment or an installed browser extension, not from this code.
 
 const ConnectionVisualizer = () => {
+  // Dynamically load html2canvas only when needed (canvas sandbox-safe)
+  const loadHtml2Canvas = async () => {
+    if (typeof window !== 'undefined' && window.html2canvas) return window.html2canvas;
+    if (typeof document !== 'undefined') {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      return window.html2canvas;
+    }
+    throw new Error('html2canvas not available in this environment');
+  };
   // --- State ---
   const [scatter, setScatter] = useState(false);
   const [firstDegree, setFirstDegree] = useState(10);
@@ -19,6 +34,7 @@ const ConnectionVisualizer = () => {
   const [beamType, setBeamType] = useState("loving-kindness"); // "good-vibes" | "loving-kindness" | "we-care"
   const svgRef = useRef();
   const imageRef = useRef();
+  const rippleTimerRef = useRef(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -171,28 +187,25 @@ const ConnectionVisualizer = () => {
   const handleShare = async () => {
     if (!imageRef.current) return;
     try {
-      // Higher resolution capture + solid background. CORS enabled for safety.
+      const html2canvas = await loadHtml2Canvas();
       const canvas = await html2canvas(imageRef.current, {
-        scale: window.devicePixelRatio > 1 ? 2 : 1,
+        scale: (typeof window !== 'undefined' && window.devicePixelRatio > 1) ? 2 : 1,
         backgroundColor: '#ffffff',
         useCORS: true,
         logging: false,
       });
 
-      // Use toBlob for better memory & Safari handling
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1));
       if (!blob) throw new Error('Canvas toBlob failed');
       const url = URL.createObjectURL(blob);
 
-      // Safari/iOS often blocks programmatic downloads; open in a new tab instead
-     const ua = navigator.userAgent;
+      const ua = navigator.userAgent;
 const isSafari = ua.includes('Safari/') && !ua.includes('Chrome/');
 const isIOS = /iPad|iPhone|iPod/.test(ua);
 
 
       if (isSafari || isIOS) {
         window.open(url, '_blank', 'noopener,noreferrer');
-        // Let the tab own the URL; revoke later just in case
         setTimeout(() => URL.revokeObjectURL(url), 30000);
         return;
       }
@@ -207,8 +220,8 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error('Share (save image) failed:', e);
-      // Last-resort fallback: open a data URL
       try {
+        const html2canvas = await loadHtml2Canvas();
         const fallbackCanvas = await html2canvas(imageRef.current, { scale: 1, backgroundColor: '#ffffff' });
         const dataUrl = fallbackCanvas.toDataURL('image/png');
         window.open(dataUrl, '_blank', 'noopener,noreferrer');
@@ -220,8 +233,8 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
   };
 
   // --- Social share helpers ---
-  const SHARE_URL = encodeURIComponent("https://www.jordanquaglia.com/bwc");
-  const SHARE_TEXT = encodeURIComponent("Explore your We-Web and see your ripple of care:");
+  const SHARE_URL = encodeURIComponent("https://www.jordanquaglia.com/ripplemap");
+  const SHARE_TEXT = encodeURIComponent("Visualize your social network and ripple effect:");
   const shareTo = (platform) => {
     let url = "";
     switch (platform) {
@@ -241,6 +254,15 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
         return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  // Clicks should also trigger a one-shot ripple (in addition to hover)
+  const triggerRipples = (type) => {
+    setBeamType(type);
+    setShowRipples(true);
+    if (rippleTimerRef.current) clearTimeout(rippleTimerRef.current);
+    const ms = type === "we-care" ? 14000 : (type === "good-vibes" ? 8000 : 12000);
+    rippleTimerRef.current = setTimeout(() => setShowRipples(false), ms);
   };
 
   const renderRipples = () => {
@@ -333,7 +355,8 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           {/* Top option: Good Vibes */}
           <button
             onMouseEnter={() => { setBeamType("good-vibes"); setShowRipples(true); }}
-            onMouseLeave={() => setShowRipples(false)}
+            onMouseLeave={() => setShowRipples(false) /* hover end */}
+            onClick={() => triggerRipples("good-vibes")}
             className="bg-amber-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Good Vibes
@@ -342,7 +365,8 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           {/* Loving-Kindness: outward only (pink) */}
           <button
             onMouseEnter={() => { setBeamType("loving-kindness"); setShowRipples(true); }}
-            onMouseLeave={() => setShowRipples(false)}
+            onMouseLeave={() => setShowRipples(false) /* hover end */}
+            onClick={() => triggerRipples("loving-kindness")}
             className="bg-pink-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Loving-Kindness
@@ -351,7 +375,8 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           {/* We-Care: out and back (green) with stronger return visibility */}
           <button
             onMouseEnter={() => { setBeamType("we-care"); setShowRipples(true); }}
-            onMouseLeave={() => setShowRipples(false)}
+            onMouseLeave={() => setShowRipples(false) /* hover end */}
+            onClick={() => triggerRipples("we-care")}
             className="bg-green-600 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam We-Care
@@ -378,7 +403,7 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.5 8h4V23h-4V8zm7 0h3.8v2.05h.05c.53-1 1.84-2.05 3.8-2.05 4.06 0 4.8 2.67 4.8 6.14V23h-4v-6.6c0-1.57-.03-3.6-2.2-3.6-2.2 0-2.54 1.72-2.54 3.5V23h-4V8z"/></svg>
             </button>
             <button aria-label="Copy link" title="Copy link" onClick={() => shareTo("copy")} className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-200 text-gray-700 hover:brightness-110">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.59 13.41a1.998 1.998 0 0 1 0-2.82l2.83-2.83a2 2 0 1 1 2.83 2.83l-.88.88 1.41 1.41.88-.88a4 4 0 1 0-5.66-5.66l-2.83 2.83a4 4 0 0 0 0 5.66l.42.42 1.41-1.41-.41-.41Z"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.59 13.41a1.998 1.998 0 0 1 0-2.82l2.83-2.83a2 2 0 1 1 2.83 2.83l-.88.88 1.41 1.41.88-.88a4 4 0 1 0-5.66-5.66l-2.83 2.83a4 4 0 0 0 0 5.66l.42.42 1.41-1.41-.41-.41Zm2.82-2.82a1.998 1.998 0 0 1 0 2.82l-2.83 2.83a2 2 0 1 1-2.83-2.83l.88-.88-1.41-1.41-.88.88a4 4 0 1 0 5.66 5.66l2.83-2.83a4 4 0 0 0 0-5.66l-.42-.42-1.41 1.41.41.41Z"/></svg>
             </button>
           </div>
         </div>
@@ -386,7 +411,7 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
 
       {/* RIGHT: Visualization & stats */}
       <div
-        className="flex-1 space-y-4"
+        className="flex-1 items-center flex flex-col space-y-4 w-[640px] max-w-full mx-auto"
         ref={imageRef}
         onMouseEnter={() => setScatter(true)}
         onMouseLeave={() => setScatter(false)}
@@ -420,7 +445,7 @@ const isIOS = /iPad|iPhone|iPod/.test(ua);
           <p>2nd degree: {secondDegree} connections</p>
           <p>3rd degree: {thirdDegree} connections</p>
           <p>Total network size: {totalNetworkSize}</p>
-          <p className="mt-2 text-xs text-gray-400">Visualize Your Network Here: www.jordanquaglia.com/bwc</p>
+          <p className="mt-2 text-xs text-gray-400">Visualize Your Network Here: www.jordanquaglia.com/ripplemap</p>
         </div>
       </div>
 
