@@ -185,9 +185,10 @@ const ConnectionVisualizer = () => {
       const url = URL.createObjectURL(blob);
 
       // Safari/iOS often blocks programmatic downloads; open in a new tab instead
-      const ua = navigator.userAgent;
-      const isSafari = /Safari\\//.test(ua) && !/Chrome\\//.test(ua);
-      const isIOS = /iPad|iPhone|iPod/.test(ua);
+     const ua = navigator.userAgent;
+const isSafari = ua.includes('Safari/') && !ua.includes('Chrome/');
+const isIOS = /iPad|iPhone|iPod/.test(ua);
+
 
       if (isSafari || isIOS) {
         window.open(url, '_blank', 'noopener,noreferrer');
