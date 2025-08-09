@@ -1,0 +1,451 @@
+import React, { useState, useEffect, useRef } from "react";
+import html2canvas from "html2canvas";
+
+// NOTE: This component has **no** MetaMask/web3 calls. If you still see a
+// "Failed to connect to MetaMask" error, it's coming from the host/sandbox
+// environment or an installed browser extension, not from this code.
+
+const ConnectionVisualizer = () => {
+  // --- State ---
+  const [scatter, setScatter] = useState(false);
+  const [firstDegree, setFirstDegree] = useState(10);
+  const [averageConnections, setAverageConnections] = useState(15);
+  const [secondDegree, setSecondDegree] = useState(0);
+  const [thirdDegree, setThirdDegree] = useState(0);
+  const [totalNetworkSize, setTotalNetworkSize] = useState(0);
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [colorScheme, setColorScheme] = useState("default");
+  const [showRipples, setShowRipples] = useState(false);
+  const [beamType, setBeamType] = useState("loving-kindness"); // "good-vibes" | "loving-kindness" | "we-care"
+  const svgRef = useRef();
+  const imageRef = useRef();
+
+  // --- Effects ---
+  useEffect(() => {
+    updateNetwork(firstDegree, averageConnections);
+    // gentle scatter when numbers change
+    setScatter(true);
+    const t = setTimeout(() => setScatter(false), 1000);
+    return () => clearTimeout(t);
+  }, [firstDegree, averageConnections]);
+
+  // Simple runtime tests to catch logic regressions (acts as "test cases")
+  useEffect(() => {
+    const F = 3, A = 2; // tiny sample
+    const S = F * A;
+    const T = S * A;
+    console.assert(S === 6, "Second-degree calc failed");
+    console.assert(T === 12, "Third-degree calc failed");
+    console.assert(F + S + T === 21, "Total network size calc failed");
+  }, []);
+
+  // --- Computation ---
+  const updateNetwork = (F, A) => {
+    const S = F * A; // second-degree
+    const T = S * A; // third-degree
+    setSecondDegree(S);
+    setThirdDegree(T);
+    setTotalNetworkSize(F + S + T);
+  };
+
+  // --- Colors ---
+  const centerColors = {
+    default: "#f59e0b",
+    cool: "#6366f1",
+    forest: "#14532d",
+    ocean: "#0c4a6e",
+    dusk: "#7c3aed",
+    grayscale: "#555",
+    rainbow: "#e11d48",
+    cupid: "#ff4d6d",
+  };
+
+  const schemes = {
+    default: ["#f59e0b", "#f97316", "#ef4444"],
+    cool: ["#6366f1", "#0ea5e9", "#34d399"],
+    forest: ["#14532d", "#166534", "#4ade80"],
+    ocean: ["#0c4a6e", "#0284c7", "#7dd3fc"],
+    dusk: ["#7c3aed", "#9333ea", "#e879f9"],
+    grayscale: ["#555", "#999", "#ccc"],
+    rainbow: ["#ef4444", "#f59e0b", "#facc15", "#22c55e", "#22d3ee", "#6366f1", "#a855f7"],
+    cupid: ["#ff4d6d", "#ff6b81", "#ff8fa3"],
+  };
+
+  // --- Rendering helpers ---
+  const renderClusteredNodes = (count, radius, degree) => {
+    const nodes = [];
+
+    // --- Dynamic density & distribution ---
+    // Scale band thickness and spacing with demand so very large networks stay readable.
+    const baseThickness = degree === 1 ? 18 : degree === 2 ? 24 : 36; // px
+    const baseSpacing = degree === 3 ? 2 : 4; // px (min gap)
+
+    // Allow thicker bands and smaller spacing as counts get very large
+    const densityBoost = Math.min(2.0, Math.log10((count || 1)) / 3); // 0..~2
+    const thickness = baseThickness * (1 + densityBoost * 0.8); // up to ~2.6x
+    const spacing = Math.max(1, baseSpacing * (1 - densityBoost * 0.4)); // outer ring can go ~40% tighter
+
+    // Estimate max nodes by area packing of the annulus band
+    const annulusArea = 2 * Math.PI * radius * thickness; // area ≈ circumference * band width
+    const packingEfficiency = 0.7; // hex-like packing (rough)
+    const maxByArea = Math.floor((annulusArea * packingEfficiency) / (spacing * spacing));
+
+    // Caps (hard): outer ring up to 10k, inner rings higher but still bounded for perf
+    const ringCap = degree === 3 ? 10000 : degree === 2 ? 2000 : 1200;
+    const baseColor = schemes[colorScheme] || schemes.default;
+
+    const safeCount = Math.min(count, ringCap, Math.max(1, maxByArea));
+
+    // Use a low-discrepancy sequence (golden angle) for even angular distribution
+    const golden = Math.PI * (3 - Math.sqrt(5)); // ~2.399963
+    const angleStart = Math.random() * Math.PI * 2; // slight variation per render
+
+    for (let i = 0; i < safeCount; i++) {
+      const angle = angleStart + i * golden; // wraps naturally
+      // Sample within the band around the target radius
+      const radialOffset = (Math.random() - 0.5) * thickness; // [-thickness/2, +thickness/2]
+      const dist = radius + radialOffset;
+
+      const finalX = 300 + dist * Math.cos(angle);
+      const finalY = 300 + dist * Math.sin(angle);
+      const x = scatter ? 300 : finalX;
+      const y = scatter ? 300 : finalY;
+      const key = `${degree}-${i}`;
+      const isActive = hoveredNode === key;
+      // Per-node color selection (cycle across full rainbow; degree palette for others)
+      const fillColor = isActive
+        ? "#facc15"
+        : (colorScheme === "rainbow"
+            ? (baseColor[i % baseColor.length])
+            : baseColor[degree - 1]);
+      // Size & heart scaling for Cupid theme
+      const baseSize = degree === 1 ? 3.5 : degree === 2 ? 2.5 : 1.5;
+      const size = isActive ? 5 : baseSize;
+      const heartScale = size / 4; // path is designed around ~4px unit
+
+      nodes.push(
+        <g
+          key={`group-${key}`}
+          transform={`translate(${x}, ${y})`}
+          style={{
+            transition: "transform 1s ease",
+            transform: scatter ? `translate(${finalX}px, ${finalY}px)` : undefined,
+          }}
+          onMouseEnter={() => setHoveredNode(key)}
+          onMouseLeave={() => setHoveredNode(null)}
+        >
+          {colorScheme === "cupid" ? (
+            <path
+              d="M0,-4 C-2,-8 -10,-2 -4,4 C0,8 4,4 10,-2 C4,-8 2,-4 0,-4 Z"
+              transform={`scale(${heartScale})`}
+              fill={fillColor}
+              opacity={isActive ? 1 : 0.75}
+              stroke={isActive ? "#fcd34d" : "none"}
+              strokeWidth={isActive ? 1.5 : 0}
+              style={{
+                filter: isActive ? "drop-shadow(0 0 6px rgba(250, 204, 21, 0.5))" : "none",
+                cursor: "pointer",
+                transition: "all 0.4s ease",
+              }}
+            />
+          ) : (
+            <circle
+              r={size}
+              fill={fillColor}
+              opacity={isActive ? 1 : 0.6}
+              stroke={isActive ? "#fcd34d" : "none"}
+              strokeWidth={isActive ? 1.5 : 0}
+              style={{
+                filter: isActive ? "drop-shadow(0 0 6px rgba(250, 204, 21, 0.5))" : "none",
+                cursor: "pointer",
+                transition: "all 0.4s ease",
+              }}
+            />
+          )}
+        </g>
+      );
+    }
+    return nodes;
+  };
+
+  const handleShare = async () => {
+    if (!imageRef.current) return;
+    try {
+      // Higher resolution capture + solid background. CORS enabled for safety.
+      const canvas = await html2canvas(imageRef.current, {
+        scale: window.devicePixelRatio > 1 ? 2 : 1,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      });
+
+      // Use toBlob for better memory & Safari handling
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1));
+      if (!blob) throw new Error('Canvas toBlob failed');
+      const url = URL.createObjectURL(blob);
+
+      // Safari/iOS often blocks programmatic downloads; open in a new tab instead
+      const ua = navigator.userAgent;
+      const isSafari = /Safari\\//.test(ua) && !/Chrome\\//.test(ua);
+      const isIOS = /iPad|iPhone|iPod/.test(ua);
+
+      if (isSafari || isIOS) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        // Let the tab own the URL; revoke later just in case
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        return;
+      }
+
+      const link = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      link.download = `network-visualization-${ts}.png`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Share (save image) failed:', e);
+      // Last-resort fallback: open a data URL
+      try {
+        const fallbackCanvas = await html2canvas(imageRef.current, { scale: 1, backgroundColor: '#ffffff' });
+        const dataUrl = fallbackCanvas.toDataURL('image/png');
+        window.open(dataUrl, '_blank', 'noopener,noreferrer');
+      } catch (e2) {
+        console.error('Share fallback failed:', e2);
+        alert('Sorry—saving the image failed in this browser. Try desktop Chrome/Edge/Firefox.');
+      }
+    }
+  };
+
+  // --- Social share helpers ---
+  const SHARE_URL = encodeURIComponent("https://www.jordanquaglia.com/bwc");
+  const SHARE_TEXT = encodeURIComponent("Explore your We-Web and see your ripple of care:");
+  const shareTo = (platform) => {
+    let url = "";
+    switch (platform) {
+      case "facebook":
+        url = `https://www.facebook.com/sharer/sharer.php?u=${SHARE_URL}`;
+        break;
+      case "twitter":
+        url = `https://twitter.com/intent/tweet?text=${SHARE_TEXT}&url=${SHARE_URL}`;
+        break;
+      case "linkedin":
+        url = `https://www.linkedin.com/sharing/share-offsite/?url=${SHARE_URL}`;
+        break;
+      case "copy":
+        navigator.clipboard.writeText(decodeURIComponent(SHARE_URL));
+        return;
+      default:
+        return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const renderRipples = () => {
+    if (!showRipples) return null;
+    const ripples = [];
+    for (let i = 0; i < 3; i++) {
+      // Stagger delays for a calmer cadence
+      const delay = `${i * 3}s`;
+      let strokeColor, animationName, duration, timing;
+      if (beamType === "we-care") {
+        // Out then back in; a bit more visible on return near center
+        strokeColor = "rgba(34, 197, 94, 0.45)"; // green
+        animationName = "ripple-bounce-smooth";
+        duration = "14s";
+        timing = "ease-in-out"; // smooth oscillation
+      } else if (beamType === "good-vibes") {
+        // Gold, outward only, slightly faster than loving-kindness
+        strokeColor = "rgba(250, 204, 21, 0.5)"; // amber/gold, a touch stronger
+        animationName = "ripple-out-visible"; // stays visible longer and grows larger
+        duration = "8s"; // faster
+      } else {
+        // Loving-kindness: pink, outward only
+        strokeColor = "rgba(236, 72, 153, 0.45)"; // pink, a touch stronger
+        animationName = "ripple-out-visible"; // stays visible longer and grows larger
+        duration = "12s";
+      }
+      ripples.push(
+        <circle
+          key={`ripple-${beamType}-${i}`}
+          className="ripple"
+          cx="300" cy="300"
+          r="1"
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="4"
+          style={{ animation: `${animationName} ${duration} ${timing || 'linear'} ${delay} infinite` }}
+        />
+      );
+    }
+    return ripples;
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row w-full p-4 gap-8">
+      {/* LEFT: Title, inputs, actions */}
+      <div className="w-full lg:max-w-sm space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800">Ripple Map: Visualize Your Ripple Effect</h1>
+          <p className="text-left text-sm text-gray-600 mt-1">Visualize how your impact ripples through your social network. To estimate your first-degree connections, count the number of people you commonly interact with directly (e.g., friends, neighbors, or anyone you interact with every week or two, whether in-person or digital). Then enter the average number of people each of those connections might be connected to—if you don't know, 15 is an average estimate from research. For more on the science behind this project, plus a contemplative practice called Beaming We-Care, see Chpt. 9 of my book, From Self-Care to We-Care.</p>
+        </div>
+
+        <div className="space-y-2 text-sm text-gray-700">
+          <label className="block font-medium">First-degree connections:</label>
+          <input
+            type="number"
+            className="w-full p-2 border rounded"
+            value={firstDegree === 0 ? "" : firstDegree}
+            min={0}
+            onChange={(e) => setFirstDegree(parseInt(e.target.value) || 0)}
+          />
+          <label className="block font-medium">Avg connections per person:</label>
+          <input
+            type="number"
+            className="w-full p-2 border rounded"
+            value={averageConnections === 0 ? "" : averageConnections}
+            min={1}
+            onChange={(e) => setAverageConnections(parseInt(e.target.value) || 0)}
+          />
+        </div>
+
+        <div className="text-sm">
+          <label className="block mb-1 font-medium">Color Scheme</label>
+          <select
+            className="w-full p-2 border rounded"
+            value={colorScheme}
+            onChange={(e) => setColorScheme(e.target.value)}
+          >
+            <option value="default">Warm (Orange)</option>
+            <option value="cool">Cool (Indigo)</option>
+            <option value="forest">Forest</option>
+            <option value="ocean">Ocean</option>
+            <option value="dusk">Dusk</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="rainbow">Rainbow</option>
+            <option value="cupid">Cupid</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2">
+          {/* Top option: Good Vibes */}
+          <button
+            onMouseEnter={() => { setBeamType("good-vibes"); setShowRipples(true); }}
+            onMouseLeave={() => setShowRipples(false)}
+            className="bg-amber-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
+          >
+            Beam Good Vibes
+          </button>
+
+          {/* Loving-Kindness: outward only (pink) */}
+          <button
+            onMouseEnter={() => { setBeamType("loving-kindness"); setShowRipples(true); }}
+            onMouseLeave={() => setShowRipples(false)}
+            className="bg-pink-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
+          >
+            Beam Loving-Kindness
+          </button>
+
+          {/* We-Care: out and back (green) with stronger return visibility */}
+          <button
+            onMouseEnter={() => { setBeamType("we-care"); setShowRipples(true); }}
+            onMouseLeave={() => setShowRipples(false)}
+            className="bg-green-600 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
+          >
+            Beam We-Care
+          </button>
+
+          {/* Save image */}
+          <button
+            onClick={handleShare}
+            className="bg-gray-700 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110 mt-2"
+          >
+            Share (Save Image)
+          </button>
+
+          {/* Social share row */}
+          <div className="flex items-center gap-3 mt-2">
+            <span className="text-xs uppercase tracking-wide text-gray-500">Share:</span>
+            <button aria-label="Share on Facebook" title="Share on Facebook" onClick={() => shareTo("facebook")} className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white hover:brightness-110">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12a10 10 0 1 0-11.5 9.87v-6.99H7.9V12h2.6V9.8c0-2.57 1.53-3.99 3.87-3.99 1.12 0 2.29.2 2.29.2v2.52h-1.29c-1.27 0-1.66.79-1.66 1.6V12h2.83l-.45 2.88h-2.38v6.99A10 10 0 0 0 22 12z"/></svg>
+            </button>
+            <button aria-label="Share on X" title="Share on X" onClick={() => shareTo("twitter")} className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-black text-white hover:brightness-110">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 3H21l-6.73 7.69L22 21h-6.276l-4.91-6.02L5.1 21H2.343l7.2-8.228L2 3h6.44l4.42 5.548L18.244 3Zm-1.1 16h1.54L7.01 4H5.4l11.744 15Z"/></svg>
+            </button>
+            <button aria-label="Share on LinkedIn" title="Share on LinkedIn" onClick={() => shareTo("linkedin")} className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-700 text-white hover:brightness-110">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.5 8h4V23h-4V8zm7 0h3.8v2.05h.05c.53-1 1.84-2.05 3.8-2.05 4.06 0 4.8 2.67 4.8 6.14V23h-4v-6.6c0-1.57-.03-3.6-2.2-3.6-2.2 0-2.54 1.72-2.54 3.5V23h-4V8z"/></svg>
+            </button>
+            <button aria-label="Copy link" title="Copy link" onClick={() => shareTo("copy")} className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-200 text-gray-700 hover:brightness-110">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.59 13.41a1.998 1.998 0 0 1 0-2.82l2.83-2.83a2 2 0 1 1 2.83 2.83l-.88.88 1.41 1.41.88-.88a4 4 0 1 0-5.66-5.66l-2.83 2.83a4 4 0 0 0 0 5.66l.42.42 1.41-1.41-.41-.41Z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT: Visualization & stats */}
+      <div
+        className="flex-1 space-y-4"
+        ref={imageRef}
+        onMouseEnter={() => setScatter(true)}
+        onMouseLeave={() => setScatter(false)}
+      >
+        <svg ref={svgRef} width="600" height="600" className="mx-auto block">
+          {/* Center node (theme color) */}
+          {colorScheme === "cupid" ? (
+            <g transform="translate(300,300)">
+              <path
+                d="M0,-4 C-2,-8 -10,-2 -4,4 C0,8 4,4 10,-2 C4,-8 2,-4 0,-4 Z"
+                transform="scale(0.75)"
+                fill={centerColors[colorScheme]}
+                opacity={0.9}
+              />
+            </g>
+          ) : (
+            <circle cx="300" cy="300" r="3" fill={centerColors[colorScheme]} />
+          )}
+
+          {/* Rings of clustered nodes */}
+          {renderClusteredNodes(firstDegree, 90, 1)}
+          {renderClusteredNodes(secondDegree, 180, 2)}
+          {renderClusteredNodes(thirdDegree, 270, 3)}
+
+          {/* Ripples sit on top so they are visible above nodes */}
+          {renderRipples()}
+        </svg>
+
+        <div className="text-center text-sm text-gray-600">
+          <p>1st degree: {firstDegree} connections</p>
+          <p>2nd degree: {secondDegree} connections</p>
+          <p>3rd degree: {thirdDegree} connections</p>
+          <p>Total network size: {totalNetworkSize}</p>
+          <p className="mt-2 text-xs text-gray-400">Visualize Your Network Here: www.jordanquaglia.com/bwc</p>
+        </div>
+      </div>
+
+      {/* Inline keyframes for ripples */}
+      <style>{`
+        /* Outward-only ripples (Good Wishes + Loving-Kindness)
+           Extend slightly beyond the outer ring (r=270) and fade out by the edge */
+        @keyframes ripple-out-visible {
+          0%   { r: 1;   opacity: 1; }
+          70%  { r: 260; opacity: 0.25; }
+          100% { r: 300; opacity: 0; }
+        }
+
+        /* We-Care: smooth outward-and-return with subtle visibility on return */
+        @keyframes ripple-bounce-smooth {
+          0%   { r: 1;   opacity: 1; }
+          45%  { r: 300; opacity: 0.25; }
+          55%  { r: 300; opacity: 0.25; }
+          95%  { r: 8;   opacity: 0.35; }
+          100% { r: 1;   opacity: 0; }
+        }
+
+        .ripple { transform-origin: center; }
+      `}</style>
+    </div>
+  );
+};
+
+export default ConnectionVisualizer;
