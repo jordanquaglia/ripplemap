@@ -277,7 +277,7 @@ const ConnectionVisualizer = () => {
             <p>To visualize how your impact ripples through your social network:</p>
             <ol className="list-decimal pl-5 space-y-1">
               <li>
-                Estimate your first-degree connections — count the people you interact with regularly, about once a week on average, whether in person or digital. Only include relationships where the interaction is personal and two-way.
+                Estimate your first-degree connections — count the people you interact with regularly, about once a week on average, in person or digital. Only include relationships where the interaction is personal and two-way.
               </li>
               <li>
                 Enter the average number of people each of those connections might be connected to—12 is an estimate from research.
@@ -381,7 +381,7 @@ const ConnectionVisualizer = () => {
 
       {/* RIGHT: Visualization & stats */}
       <div
-        className="flex-1 items-center flex flex-col space-y-4 w-[640px] max-w-full mx-auto"
+        className="flex-1 items-center flex flex-col space-y-4 w-[640px] max-w-full mx-auto pt-12 md:pt-16"
         ref={imageRef}
         onMouseEnter={() => setScatter(true)}
         onMouseLeave={() => setScatter(false)}
@@ -414,7 +414,7 @@ const ConnectionVisualizer = () => {
           {renderRipples()}
         </svg>
 
-        <div className="text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-gray-600">
           <p>1st degree: {firstDegree} connections</p>
           <p>2nd degree: {secondDegree} connections</p>
           <p>3rd degree: {thirdDegree} connections</p>
