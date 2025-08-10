@@ -7,11 +7,11 @@ import React, { useState, useEffect, useRef } from "react";
 const ConnectionVisualizer = () => {
   // Guard against heavy first paint in sandbox: delay full ring render until after mount
   const [isReady, setIsReady] = useState(false);
-  // Dynamically load html2canvas only when needed (canvas sandbox-safe)
-    // --- State ---
+
+  // --- State ---
   const [scatter, setScatter] = useState(false);
   const [firstDegree, setFirstDegree] = useState(10);
-  const [averageConnections, setAverageConnections] = useState(15);
+  const [averageConnections, setAverageConnections] = useState(12);
   const [secondDegree, setSecondDegree] = useState(0);
   const [thirdDegree, setThirdDegree] = useState(0);
   const [totalNetworkSize, setTotalNetworkSize] = useState(0);
@@ -19,6 +19,7 @@ const ConnectionVisualizer = () => {
   const [colorScheme, setColorScheme] = useState("default");
   const [showRipples, setShowRipples] = useState(false);
   const [lockRipples, setLockRipples] = useState(false);
+  const [rippleSeq, setRippleSeq] = useState(0);
   const [beamType, setBeamType] = useState("loving-kindness"); // "good-vibes" | "loving-kindness" | "we-care"
   const svgRef = useRef();
   const imageRef = useRef();
@@ -50,6 +51,12 @@ const ConnectionVisualizer = () => {
     console.assert(S === 6, "Second-degree calc failed");
     console.assert(T === 12, "Third-degree calc failed");
     console.assert(F + S + T === 21, "Total network size calc failed");
+
+    // extra sanity checks (do not modify behavior)
+    const F2 = 10, A2 = 15;
+    const S2 = F2 * A2; // 150
+    const T2 = S2 * A2; // 2250
+    console.assert(S2 === 150 && T2 === 2250 && F2 + S2 + T2 === 2410, "Example calc mismatch");
   }, []);
 
   // --- Computation ---
@@ -181,7 +188,6 @@ const ConnectionVisualizer = () => {
     return nodes;
   };
 
-  
   // --- Social share helpers ---
   const SHARE_URL = encodeURIComponent("https://www.jordanquaglia.com/ripplemap");
   const SHARE_TEXT = encodeURIComponent("Visualize your social network and ripple effect:");
@@ -209,6 +215,8 @@ const ConnectionVisualizer = () => {
   // Clicks should also trigger a one-shot ripple (in addition to hover)
   const triggerRipples = (type) => {
     setBeamType(type);
+    // Force a fresh mount of ripple circles so CSS animation always restarts
+    setRippleSeq((s) => s + 1);
     setShowRipples(true);
     setLockRipples(true);
     if (rippleTimerRef.current) clearTimeout(rippleTimerRef.current);
@@ -245,7 +253,7 @@ const ConnectionVisualizer = () => {
       }
       ripples.push(
         <circle
-          key={`ripple-${beamType}-${i}`}
+          key={`ripple-${beamType}-${rippleSeq}-${i}`}
           className="ripple"
           cx="300" cy="300"
           r="1"
@@ -264,8 +272,24 @@ const ConnectionVisualizer = () => {
       {/* LEFT: Title, inputs, actions */}
       <div className="w-full lg:max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800">Ripple Map: Visualize Your Ripple Effect</h1>
-          <p className="text-left text-sm text-gray-600 mt-1">Visualize how your impact ripples through your social network. To estimate your first-degree connections, count the number of people you commonly interact with directly (e.g., friends, neighbors, or anyone you interact with every week or two, whether in-person or digital). Then enter the average number of people each of those connections might be connected to—if you don't know, 15 is an average estimate from research. For more on the science behind this project, plus a contemplative practice called Beaming We-Care, see Chpt. 9 of my book, From Self-Care to We-Care.</p>
+          <h1 className="text-2xl font-bold text-gray-800">Ripple Map: See Your Impact</h1>
+          <div className="text-left text-sm text-gray-600 mt-1 max-w-[70ch]">
+            <p>To visualize how your impact ripples through your social network:</p>
+            <ol className="list-decimal pl-5 space-y-1">
+              <li>
+                Estimate your first-degree connections — count the people you interact with regularly, about once a week on average, whether in person or digital. Only include relationships where the interaction is personal and two-way.
+              </li>
+              <li>
+                Enter the average number of people each of those connections might be connected to—12 is an estimate from research.
+              </li>
+              <li>
+                Click and hover over the buttons to visualize the social reach of your care.
+              </li>
+            </ol>
+            <p className="mt-2">
+              For more on the science behind this project, plus a companion practice called Beaming We-Care, see Chpt. 9 of my book, <em>From Self-Care to We-Care</em>.
+            </p>
+          </div>
         </div>
 
         <div className="space-y-2 text-sm text-gray-700">
@@ -308,9 +332,9 @@ const ConnectionVisualizer = () => {
         <div className="flex flex-col gap-2 pt-2">
           {/* Top option: Good Vibes */}
           <button
-            onMouseEnter={() => { setBeamType("good-vibes"); setShowRipples(true); }}
-            onMouseLeave={() => { if (!lockRipples) setShowRipples(false); } /* hover end */}
-            onClick={() => triggerRipples("good-vibes")}
+            onPointerEnter={() => { setBeamType("good-vibes"); setShowRipples(true); }}
+            onPointerLeave={() => { if (!lockRipples) setShowRipples(false); }}
+            onPointerDown={() => triggerRipples("good-vibes")} onClick={() => triggerRipples("good-vibes")}
             className="bg-amber-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Good Vibes
@@ -318,9 +342,9 @@ const ConnectionVisualizer = () => {
 
           {/* Loving-Kindness: outward only (pink) */}
           <button
-            onMouseEnter={() => { setBeamType("loving-kindness"); setShowRipples(true); }}
-            onMouseLeave={() => { if (!lockRipples) setShowRipples(false); } /* hover end */}
-            onClick={() => triggerRipples("loving-kindness")}
+            onPointerEnter={() => { setBeamType("loving-kindness"); setShowRipples(true); }}
+            onPointerLeave={() => { if (!lockRipples) setShowRipples(false); }}
+            onPointerDown={() => triggerRipples("loving-kindness")} onClick={() => triggerRipples("loving-kindness")}
             className="bg-pink-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Loving-Kindness
@@ -328,15 +352,14 @@ const ConnectionVisualizer = () => {
 
           {/* We-Care: out and back (green) with stronger return visibility */}
           <button
-            onMouseEnter={() => { setBeamType("we-care"); setShowRipples(true); }}
-            onMouseLeave={() => { if (!lockRipples) setShowRipples(false); } /* hover end */}
-            onClick={() => triggerRipples("we-care")}
+            onPointerEnter={() => { setBeamType("we-care"); setShowRipples(true); }}
+            onPointerLeave={() => { if (!lockRipples) setShowRipples(false); }}
+            onPointerDown={() => triggerRipples("we-care")} onClick={() => triggerRipples("we-care")}
             className="bg-green-600 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam We-Care
           </button>
 
-          {/* Save image */}
           {/* Social share row */}
           <div className="flex items-center gap-3 mt-2">
             <span className="text-xs uppercase tracking-wide text-gray-500">Share:</span>
@@ -426,3 +449,4 @@ const ConnectionVisualizer = () => {
 };
 
 export default ConnectionVisualizer;
+
