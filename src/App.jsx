@@ -342,7 +342,7 @@ const ConnectionVisualizer = () => {
         </div>
 
         <div className="space-y-2 text-sm text-gray-700">
-          <label className="block font-medium">First-degree connections:</label>
+          <label className="block font-medium"># of First-degree Connections:</label>
           <input
             type="number"
             className="w-full p-2 border rounded"
