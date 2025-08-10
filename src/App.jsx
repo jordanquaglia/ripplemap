@@ -23,7 +23,8 @@ const ConnectionVisualizer = () => {
   const [beamType, setBeamType] = useState("loving-kindness"); // "good-vibes" | "loving-kindness" | "we-care"
   const svgRef = useRef();
   const imageRef = useRef();
-  const rippleTimerRef = useRef(null);
+  // (timer ref unused now that continuous mode is toggled via pointer)
+  // const rippleTimerRef = useRef(null);
   const rippleRefs = useRef([]);
   const rippleRafRef = useRef(0);
 
@@ -373,7 +374,7 @@ const ConnectionVisualizer = () => {
           <button
             onPointerEnter={() => { if (!continuousType) { setBeamType("good-vibes"); setShowRipples(true); } }}
             onPointerLeave={() => { if (!continuousType) setShowRipples(false); }}
-            onPointerDown={() => toggleContinuous("good-vibes")} onClick={() => toggleContinuous("good-vibes")} 
+            onPointerDown={(e) => { e.preventDefault(); toggleContinuous("good-vibes"); }}  
             className="bg-amber-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Good Vibes
@@ -383,7 +384,7 @@ const ConnectionVisualizer = () => {
           <button
             onPointerEnter={() => { if (!continuousType) { setBeamType("loving-kindness"); setShowRipples(true); } }}
             onPointerLeave={() => { if (!continuousType) setShowRipples(false); }}
-            onPointerDown={() => toggleContinuous("loving-kindness")} onClick={() => toggleContinuous("loving-kindness")} 
+            onPointerDown={(e) => { e.preventDefault(); toggleContinuous("loving-kindness"); }}  
             className="bg-pink-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Loving-Kindness
@@ -393,7 +394,7 @@ const ConnectionVisualizer = () => {
           <button
             onPointerEnter={() => { if (!continuousType) { setBeamType("we-care"); setShowRipples(true); } }}
             onPointerLeave={() => { if (!continuousType) setShowRipples(false); }}
-            onPointerDown={() => toggleContinuous("we-care")} onClick={() => toggleContinuous("we-care")} 
+            onPointerDown={(e) => { e.preventDefault(); toggleContinuous("we-care"); }}  
             className="bg-green-600 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam We-Care
