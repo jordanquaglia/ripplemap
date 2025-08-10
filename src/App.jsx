@@ -326,7 +326,7 @@ const ConnectionVisualizer = () => {
       <div className="w-full lg:max-w-sm space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-800">Ripple Map: See Your Impact</h1>
-          <div className="text-left text-sm text-gray-600 mt-3 max-w-[70ch]">
+          <div className="text-left text-sm text-gray-600 mt-1 max-w-[70ch]">
             <p>To visualize how your impact ripples through your social network across three degrees of connection:</p>
             <ol className="list-decimal pl-5 space-y-2">
               <li>
