@@ -314,8 +314,8 @@ const ConnectionVisualizer = () => {
             value={colorScheme}
             onChange={(e) => setColorScheme(e.target.value)}
           >
-            <option value="default">Warm (Orange)</option>
-            <option value="cool">Cool (Indigo)</option>
+            <option value="default">Warm</option>
+            <option value="cool">Cool</option>
             <option value="forest">Forest</option>
             <option value="ocean">Ocean</option>
             <option value="dusk">Dusk</option>
