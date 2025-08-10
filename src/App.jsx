@@ -32,15 +32,22 @@ const ConnectionVisualizer = () => {
     setScatter(true);
     const t = setTimeout(() => setScatter(false), 1000);
     return () => clearTimeout(t);
-  }, [firstDegree, averageConnections]);
+  }, [firstDegree]);
 
   // Defer heavy SVG node rendering until after mount to avoid init stalls
   useEffect(() => {
+    // Primary: defer heavy draw until after mount
     let raf1 = requestAnimationFrame(() => {
       let raf2 = requestAnimationFrame(() => setIsReady(true));
+      // Cleanup nested raf
       return () => cancelAnimationFrame(raf2);
     });
-    return () => cancelAnimationFrame(raf1);
+    // Fallback: if RAF is throttled/blocked in the sandbox, ensure readiness anyway
+    const fallback = setTimeout(() => setIsReady(true), 200);
+    return () => {
+      cancelAnimationFrame(raf1);
+      clearTimeout(fallback);
+    };
   }, []);
 
   // Simple runtime tests to catch logic regressions (acts as "test cases")
@@ -94,6 +101,7 @@ const ConnectionVisualizer = () => {
   // --- Rendering helpers ---
   const renderClusteredNodes = (count, radius, degree) => {
     const nodes = [];
+    if (!count) return nodes;
 
     // --- Dynamic density & distribution ---
     // Scale band thickness and spacing with demand so very large networks stay readable.
@@ -280,9 +288,6 @@ const ConnectionVisualizer = () => {
                 Estimate your first-degree connections — count the people you interact with regularly, about once a week on average, in person or digital. Only include relationships where the interaction is personal and two-way.
               </li>
               <li>
-                Enter the average number of people each of those connections might be connected to—12 is an estimate from research.
-              </li>
-              <li>
                 Click and hover over the buttons to visualize the social reach of your care.
               </li>
             </ol>
@@ -300,16 +305,7 @@ const ConnectionVisualizer = () => {
             value={firstDegree === 0 ? "" : firstDegree}
             min={0}
             onChange={(e) => setFirstDegree(parseInt(e.target.value) || 0)}
-          />
-          <label className="block font-medium">Avg connections per person:</label>
-          <input
-            type="number"
-            className="w-full p-2 border rounded"
-            value={averageConnections === 0 ? "" : averageConnections}
-            min={1}
-            onChange={(e) => setAverageConnections(parseInt(e.target.value) || 0)}
-          />
-        </div>
+          />        </div>
 
         <div className="text-sm">
           <label className="block mb-1 font-medium">Color Scheme</label>
@@ -381,7 +377,7 @@ const ConnectionVisualizer = () => {
 
       {/* RIGHT: Visualization & stats */}
       <div
-        className="flex-1 items-center flex flex-col space-y-4 w-[640px] max-w-full mx-auto pt-12 md:pt-16"
+        className="flex-1 items-center flex flex-col space-y-4 w-[640px] max-w-full mx-auto"
         ref={imageRef}
         onMouseEnter={() => setScatter(true)}
         onMouseLeave={() => setScatter(false)}
@@ -414,7 +410,7 @@ const ConnectionVisualizer = () => {
           {renderRipples()}
         </svg>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-3 text-center text-sm text-gray-600">
           <p>1st degree: {firstDegree} connections</p>
           <p>2nd degree: {secondDegree} connections</p>
           <p>3rd degree: {thirdDegree} connections</p>
