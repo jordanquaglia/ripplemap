@@ -24,6 +24,8 @@ const ConnectionVisualizer = () => {
   const svgRef = useRef();
   const imageRef = useRef();
   const rippleTimerRef = useRef(null);
+  const rippleRefs = useRef([]);
+  const rippleRafRef = useRef(0);
 
   // --- Effects ---
   useEffect(() => {
@@ -236,44 +238,86 @@ const ConnectionVisualizer = () => {
   };
 
   const renderRipples = () => {
+    // Render circles with refs; animation handled via requestAnimationFrame for Safari/iOS compatibility
     if (!showRipples) return null;
-    const ripples = [];
+    const items = [];
     for (let i = 0; i < 3; i++) {
-      // Stagger delays for a calmer cadence
-      const delay = `${i * 3}s`;
-      let strokeColor, animationName, duration, timing;
-      if (beamType === "we-care") {
-        // Out then back in; a bit more visible on return near center
-        strokeColor = "rgba(34, 197, 94, 0.45)"; // green
-        animationName = "ripple-bounce-smooth";
-        duration = "14s";
-        timing = "ease-in-out"; // smooth oscillation
-      } else if (beamType === "good-vibes") {
-        // Gold, outward only, slightly faster than loving-kindness
-        strokeColor = "rgba(250, 204, 21, 0.5)"; // amber/gold, a touch stronger
-        animationName = "ripple-out-visible"; // stays visible longer and grows larger
-        duration = "8s"; // faster
-      } else {
-        // Loving-kindness: pink, outward only
-        strokeColor = "rgba(236, 72, 153, 0.45)"; // pink, a touch stronger
-        animationName = "ripple-out-visible"; // stays visible longer and grows larger
-        duration = "12s";
-      }
-      ripples.push(
+      items.push(
         <circle
           key={`ripple-${beamType}-${rippleSeq}-${i}`}
-          className="ripple"
+          ref={(el) => (rippleRefs.current[i] = el)}
           cx="300" cy="300"
           r="1"
           fill="none"
-          stroke={strokeColor}
-          strokeWidth="4"
-          style={{ animation: `${animationName} ${duration} ${timing || 'linear'} ${delay} infinite` }}
+          stroke={beamType === 'we-care' ? 'rgba(34, 197, 94, 0.45)' : (beamType === 'good-vibes' ? 'rgba(250, 204, 21, 0.5)' : 'rgba(236, 72, 153, 0.45)')}
+          strokeWidth="4" opacity="0" className="ripple"
         />
       );
     }
-    return ripples;
+    return items;
   };
+
+  // JS-driven ripple animation (Safari/iOS friendly)
+  useEffect(() => {
+    if (!showRipples) {
+      if (rippleRafRef.current) cancelAnimationFrame(rippleRafRef.current);
+      rippleRafRef.current = 0;
+      rippleRefs.current.forEach((c) => c && c.setAttribute('opacity', '0'));
+      return;
+    }
+
+    const total = 3;
+    const delays = [0, 3000, 6000]; // ms
+    const duration = beamType === 'we-care' ? 14000 : (beamType === 'good-vibes' ? 8000 : 12000); // ms
+    const maxR = 310; // extend slightly beyond outer ring for longer visible travel // beyond outer ring
+    const start = performance.now();
+
+    // Prime the first frame to avoid an initial bright dot before RAF paints
+    for (let i = 0; i < total; i++) {
+      const el = rippleRefs.current[i];
+      if (el) {
+        el.setAttribute('r', '1');
+        el.setAttribute('opacity', '0.28');
+      }
+    }
+    const tick = (now) => {
+      const tGlobal = now - start;
+      for (let i = 0; i < total; i++) {
+        const el = rippleRefs.current[i];
+        if (!el) continue;
+        const t = Math.max(0, (tGlobal - delays[i]));
+        const local = t % duration;
+        let prog = local / duration; // 0..1
+        if (beamType === 'we-care') {
+          // Smooth sinusoidal out-and-back (no initial pause)
+          const s = (1 - Math.cos(2 * Math.PI * prog)) / 2; // 0..1..0
+          const r = 1 + s * (maxR - 1);
+          // Slightly brighter as it returns toward center
+          const centerBias = 1 - Math.abs(1 - 2 * prog); // peaks at 0.5
+          const opacityBase = 0.28 + 0.12 * centerBias; // ~0.28..0.4
+          const opacity = Math.min(0.42, opacityBase);
+          el.setAttribute('r', String(r));
+          el.setAttribute('opacity', String(opacity));
+        } else {
+          // Outward only (Good Vibes & Loving-Kindness): hold visibility longer near the edge
+          const r = 1 + prog * (maxR - 1);
+          const edgeHold = 0.85; // keep visible slightly longer before final fade
+          const opacity = prog < edgeHold
+            ? 1 - prog * 0.6
+            : Math.max(0, 0.4 - (prog - edgeHold) * 2.2);
+          el.setAttribute('r', String(r));
+          el.setAttribute('opacity', String(opacity));
+        }
+      }
+      rippleRafRef.current = requestAnimationFrame(tick); /* start JS-driven ripple loop */
+    };
+
+    rippleRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rippleRafRef.current) cancelAnimationFrame(rippleRafRef.current);
+      rippleRafRef.current = 0;
+    };
+  }, [showRipples, beamType, rippleSeq]);
 
   return (
     <div className="flex flex-col lg:flex-row w-full p-4 gap-8">
@@ -285,8 +329,7 @@ const ConnectionVisualizer = () => {
             <p>To visualize how your impact ripples through your social network across three degrees of connection:</p>
             <ol className="list-decimal pl-5 space-y-1">
               <li>
-                Estimate your first-degree connections — count the people you interact with regularly (at least every week or two, in person or digital). Only include relationships that are personal and two-way.
-              </li>
+                Estimate your first-degree connections — count the people you interact with regularly (at least every week or two, in person or digital). Only include relationships that are personal and two-way.              </li>
               <li>
                 Click and hover over the buttons to visualize the social reach of your care.
               </li>
@@ -421,23 +464,7 @@ const ConnectionVisualizer = () => {
 
       {/* Inline keyframes for ripples */}
       <style>{`
-        /* Outward-only ripples (Good Wishes + Loving-Kindness)
-           Extend slightly beyond the outer ring (r=270) and fade out by the edge */
-        @keyframes ripple-out-visible {
-          0%   { r: 1;   opacity: 1; }
-          70%  { r: 260; opacity: 0.25; }
-          100% { r: 300; opacity: 0; }
-        }
-
-        /* We-Care: smooth outward-and-return with subtle visibility on return */
-        @keyframes ripple-bounce-smooth {
-          0%   { r: 1;   opacity: 1; }
-          45%  { r: 300; opacity: 0.25; }
-          55%  { r: 300; opacity: 0.25; }
-          95%  { r: 8;   opacity: 0.35; }
-          100% { r: 1;   opacity: 0; }
-        }
-
+        /* JS-driven animation for Safari/iOS; keyframes kept minimal */
         .ripple { transform-origin: center; }
       `}</style>
     </div>
