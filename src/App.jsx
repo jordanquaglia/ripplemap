@@ -18,8 +18,8 @@ const ConnectionVisualizer = () => {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [colorScheme, setColorScheme] = useState("default");
   const [showRipples, setShowRipples] = useState(false);
-  const [lockRipples, setLockRipples] = useState(false);
   const [rippleSeq, setRippleSeq] = useState(0);
+  const [continuousType, setContinuousType] = useState(null); // null | 'good-vibes' | 'loving-kindness' | 'we-care'
   const [beamType, setBeamType] = useState("loving-kindness"); // "good-vibes" | "loving-kindness" | "we-care"
   const svgRef = useRef();
   const imageRef = useRef();
@@ -222,19 +222,19 @@ const ConnectionVisualizer = () => {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Clicks should also trigger a one-shot ripple (in addition to hover)
-  const triggerRipples = (type) => {
-    setBeamType(type);
-    // Force a fresh mount of ripple circles so CSS animation always restarts
-    setRippleSeq((s) => s + 1);
-    setShowRipples(true);
-    setLockRipples(true);
-    if (rippleTimerRef.current) clearTimeout(rippleTimerRef.current);
-    const ms = type === "we-care" ? 14000 : (type === "good-vibes" ? 8000 : 12000);
-    rippleTimerRef.current = setTimeout(() => {
-      setLockRipples(false);
+  // Click to toggle continuous ripples (mobile-friendly). Hover still works when not in continuous mode.
+  const toggleContinuous = (type) => {
+    if (continuousType === type) {
+      // Turn off continuous mode for this type
+      setContinuousType(null);
       setShowRipples(false);
-    }, ms);
+      return;
+    }
+    // Switch to (or start) continuous mode
+    setBeamType(type);
+    setRippleSeq((s) => s + 1); // restart sequence so animation restarts cleanly
+    setShowRipples(true);
+    setContinuousType(type);
   };
 
   const renderRipples = () => {
@@ -371,9 +371,9 @@ const ConnectionVisualizer = () => {
         <div className="flex flex-col gap-2 pt-2">
           {/* Top option: Good Vibes */}
           <button
-            onPointerEnter={() => { setBeamType("good-vibes"); setShowRipples(true); }}
-            onPointerLeave={() => { if (!lockRipples) setShowRipples(false); }}
-            onPointerDown={() => triggerRipples("good-vibes")} onClick={() => triggerRipples("good-vibes")}
+            onPointerEnter={() => { if (!continuousType) { setBeamType("good-vibes"); setShowRipples(true); } }}
+            onPointerLeave={() => { if (!continuousType) setShowRipples(false); }}
+            onPointerDown={() => toggleContinuous("good-vibes")} onClick={() => toggleContinuous("good-vibes")} 
             className="bg-amber-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Good Vibes
@@ -381,9 +381,9 @@ const ConnectionVisualizer = () => {
 
           {/* Loving-Kindness: outward only (pink) */}
           <button
-            onPointerEnter={() => { setBeamType("loving-kindness"); setShowRipples(true); }}
-            onPointerLeave={() => { if (!lockRipples) setShowRipples(false); }}
-            onPointerDown={() => triggerRipples("loving-kindness")} onClick={() => triggerRipples("loving-kindness")}
+            onPointerEnter={() => { if (!continuousType) { setBeamType("loving-kindness"); setShowRipples(true); } }}
+            onPointerLeave={() => { if (!continuousType) setShowRipples(false); }}
+            onPointerDown={() => toggleContinuous("loving-kindness")} onClick={() => toggleContinuous("loving-kindness")} 
             className="bg-pink-500 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam Loving-Kindness
@@ -391,9 +391,9 @@ const ConnectionVisualizer = () => {
 
           {/* We-Care: out and back (green) with stronger return visibility */}
           <button
-            onPointerEnter={() => { setBeamType("we-care"); setShowRipples(true); }}
-            onPointerLeave={() => { if (!lockRipples) setShowRipples(false); }}
-            onPointerDown={() => triggerRipples("we-care")} onClick={() => triggerRipples("we-care")}
+            onPointerEnter={() => { if (!continuousType) { setBeamType("we-care"); setShowRipples(true); } }}
+            onPointerLeave={() => { if (!continuousType) setShowRipples(false); }}
+            onPointerDown={() => toggleContinuous("we-care")} onClick={() => toggleContinuous("we-care")} 
             className="bg-green-600 text-white font-semibold py-2 px-4 rounded shadow hover:brightness-110"
           >
             Beam We-Care
