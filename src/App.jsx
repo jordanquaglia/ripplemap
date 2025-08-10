@@ -285,7 +285,7 @@ const ConnectionVisualizer = () => {
             <p>To visualize how your impact ripples through your social network across three degrees of connection:</p>
             <ol className="list-decimal pl-5 space-y-1">
               <li>
-                Estimate your first-degree connections — count the people you interact with regularly (at least every week or two, in person or online). Only include relationships that are personal and two-way.
+                Estimate your first-degree connections — count the people you interact with regularly (at least every week or two, in person or digital). Only include relationships that are personal and two-way.
               </li>
               <li>
                 Click and hover over the buttons to visualize the social reach of your care.
