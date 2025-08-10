@@ -269,7 +269,7 @@ const ConnectionVisualizer = () => {
     const total = 3;
     const delays = [0, 3000, 6000]; // ms
     const duration = beamType === 'we-care' ? 14000 : (beamType === 'good-vibes' ? 8000 : 12000); // ms
-    const maxR = 310; // extend slightly beyond outer ring for longer visible travel // beyond outer ring
+    const maxR = 300; // extend slightly beyond outer ring for longer visible travel // beyond outer ring
     const start = performance.now();
 
     // Prime the first frame to avoid an initial bright dot before RAF paints
