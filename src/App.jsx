@@ -321,7 +321,7 @@ const ConnectionVisualizer = () => {
   }, [showRipples, beamType, rippleSeq]);
 
   return (
-    <div className="flex flex-col lg:flex-row w-full p-4 gap-8">
+<div className="flex flex-col lg:flex-row w-full items-start justify-start gap-8 p-4 pb-2">
       {/* LEFT: Title, inputs, actions */}
       <div className="w-full lg:max-w-sm space-y-6">
         <div className="text-center">
