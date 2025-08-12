@@ -337,7 +337,7 @@ const ConnectionVisualizer = () => {
               </li>
             </ol>
             <p className="mt-2">
-              For more on the science behind this project, plus a companion practice called Beaming We-Care, see Chpt. 9 of my book, <em>From Self-Care to We-Care</em>.
+             For more on the social contagion of care and the Beaming We-Care practice, see Chapter 9 of <em>From Self-Care to We-Care</em>.
             </p>
           </div>
         </div>
