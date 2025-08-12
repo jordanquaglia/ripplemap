@@ -327,11 +327,10 @@ const ConnectionVisualizer = () => {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-800">Ripple Map: See Your Impact</h1>
           <div className="text-left text-sm text-gray-600 mt-1 max-w-[70ch]">
-              <p>To visualize how your impact ripples through your social network across three degrees of connection:</p>
-            <div style={{ height: '0.5em' }}>&nbsp;</div>
-            <ol className="list-decimal pl-5 space-y-2">
+            <p>To visualize how your impact ripples through your social network across three degrees of connection:</p>
+            <ol className="list-decimal pl-5 space-y-1">
               <li>
-                Estimate your first-degree connections — count the people you interact with regularly (at least every few weeks, in person or digital). Only include relationships that are personal and two-way.              </li>
+                Estimate your first-degree connections — count the people you interact with regularly (at least every week or two, in person or digital). Only include relationships that are personal and two-way.              </li>
               <li>
                 Click and hover over the buttons to visualize the social reach of your care.
               </li>
@@ -343,7 +342,7 @@ const ConnectionVisualizer = () => {
         </div>
 
         <div className="space-y-2 text-sm text-gray-700">
-          <label className="block font-medium"># of First-degree Connections:</label>
+          <label className="block font-medium">First-degree connections:</label>
           <input
             type="number"
             className="w-full p-2 border rounded"
